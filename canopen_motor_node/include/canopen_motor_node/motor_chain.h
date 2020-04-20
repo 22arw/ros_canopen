@@ -14,7 +14,7 @@
 namespace canopen {
 
 class MotorChain : public canopen::RosChain {
-    ClassAllocator<canopen::MotorBase> motor_allocator_;
+    ClassAllocator<canopen::MotorBase> motor_allocator_;    //not initialized at construction
     std::shared_ptr< canopen::LayerGroupNoDiag<canopen::MotorBase> > motors_;
     RobotLayerSharedPtr robot_layer_;
 

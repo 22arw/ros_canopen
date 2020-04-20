@@ -1,6 +1,6 @@
 #ifndef H_CANOPEN_LAYER
 #define H_CANOPEN_LAYER
-
+#include <iostream>	//Added 03/04 for debugging
 #include <vector>
 #include <memory>
 #include <boost/thread/shared_mutex.hpp>
@@ -87,7 +87,9 @@ public:
         if(state == Off){
             if(status.bounded<LayerStatus::Warn>()){
                 state = Init;
+                std::cout << "Layer.h: line 90" << std::endl;	//added 03/16 for debugging
                 CATCH_LAYER_HANDLER_EXCEPTIONS(handleInit(status), status);
+                std::cout << "Layer.h: line 92" << std::endl;	//added 03/16 for debugging
             }
             if(!status.bounded<LayerStatus::Warn>()) shutdown(status);
             else state = Ready;
@@ -169,7 +171,7 @@ protected:
     void destroy() { boost::unique_lock<boost::shared_mutex> lock(mutex); layers.clear(); }
 
 public:
-    virtual void add(const VectorMemberSharedPtr &l) { boost::unique_lock<boost::shared_mutex> lock(mutex); layers.push_back(l); }
+    virtual void add(const VectorMemberSharedPtr &l) { boost::unique_lock<boost::shared_mutex> lock(mutex); layers.push_back(l); std::cout << "\nL: " << (*layers[0]).getLayerState();}	//Added 03/04 for debugging
 
     template<typename Bound, typename Data, typename FuncType> bool callFunc(FuncType func, Data &status){
         boost::shared_lock<boost::shared_mutex> lock(mutex);
@@ -181,13 +183,14 @@ private:
 
   template<typename Bound, typename Iterator, typename Data, typename FuncType> Iterator call(FuncType func, Data &status, const Iterator &begin, const Iterator &end){
       bool okay_on_start = status.template bounded<Bound>();
-
       for(Iterator it = begin; it != end; ++it){
           ((**it).*func)(status);
+          std::cout << "Layer Name: " << (**it).name << "\t";  //added for debugging 04/18
           if(okay_on_start && !status.template bounded<Bound>()){
               return it;
           }
       }
+      std::cout << "NL" << std::endl;
       return end;
   }
   template<typename Iterator, typename Data, typename FuncType> Iterator call(FuncType func, Data &status, const Iterator &begin, const Iterator &end){
@@ -212,7 +215,7 @@ protected:
         }
     }
 
-    virtual void handleRead(LayerStatus &status, const LayerState &current_state) {
+    virtual void handleRead(LayerStatus &status, const LayerState &current_state) { //This is how any handle function is called by the group
         this->template call_or_fail(&Layer::read, &Layer::halt, status);
     }
     virtual void handleWrite(LayerStatus &status, const LayerState &current_state) {

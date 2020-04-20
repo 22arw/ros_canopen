@@ -1,6 +1,7 @@
 
 #include <canopen_motor_node/handle_layer.h>
 #include "interface_mapping.h"
+#include <iostream>	//added for debugging 03/17
 
 using namespace canopen;
 
@@ -17,43 +18,90 @@ template<> void LimitsHandle<joint_limits_interface::PositionJointSaturationHand
 template<>void LimitsHandle<joint_limits_interface::PositionJointSoftLimitsHandle>::reset() { limits_handle_.reset(); }
 
 bool HandleLayer::select(const MotorBase::OperationMode &m){
+    std::cout << "Handle_Layer Select: " << std::endl;	//added for debugging 03/20
     CommandMap::iterator it = commands_.find(m);
     if(it == commands_.end()) return false;
+    std::cout << "Did not return False: " << std::endl;	//added for debugging 03/20
     jh_ = it->second;
     return true;
 }
 
-HandleLayer::HandleLayer(const std::string &name, const MotorBaseSharedPtr & motor, const ObjectStorageSharedPtr storage,  XmlRpc::XmlRpcValue & options)
+HandleLayer::HandleLayer(const std::string &name, const MotorBaseSharedPtr & motor, const ObjectStorageSharedPtr storage,  XmlRpc::XmlRpcValue & options, bool is_motor_2)
 : HandleLayerBase(name + " Handle"), motor_(motor), variables_(storage), jsh_(name, &pos_, &vel_, &eff_), jph_(jsh_, &cmd_pos_), jvh_(jsh_, &cmd_vel_), jeh_(jsh_, &cmd_eff_), jh_(0), forward_command_(false),
-  filter_pos_("double"), filter_vel_("double"), filter_eff_("double"), options_(options), enable_limits_(true)
+  filter_pos_("double"), filter_vel_("double"), filter_eff_("double"), options_(options), enable_limits_(true), is_motor_2(is_motor_2)
 {
+   std::cout << "HandleLayer.cpp: Line 31" << std::endl << "cmd_vel_ address is: " << &cmd_vel_ << std::endl;	//added for debugging 03/17
+   std::cout << "cmd_vel_ equals to: " << cmd_vel_ << std::endl;	//added for debugging 03/17
+   
    commands_[MotorBase::No_Mode] = 0;
 
-   std::string p2d("rint(rad2deg(pos)*1000)"), v2d("rint(rad2deg(vel)*1000)"), e2d("rint(eff)");
-   std::string p2r("deg2rad(obj6064)/1000"), v2r("deg2rad(obj606C)/1000"), e2r("0");
+   if(!is_motor_2)
+   {
+	   std::string p2d("rint(rad2deg(pos)*1000)"), v2d("rint(rad2deg(vel)*1000)"), e2d("rint(eff)");
+	   std::string p2r("deg2rad(obj6064)/1000"), v2r("deg2rad(obj606C)/1000"), e2r("0");
 
-   if(options.hasMember("pos_unit_factor") || options.hasMember("vel_unit_factor") || options.hasMember("eff_unit_factor")){
-       const std::string reason("*_unit_factor parameters are not supported anymore, please migrate to conversion functions.");
-       ROS_FATAL_STREAM(reason);
-       throw std::invalid_argument(reason);
+	   if(options.hasMember("pos_unit_factor") || options.hasMember("vel_unit_factor") || options.hasMember("eff_unit_factor")){
+		   const std::string reason("*_unit_factor parameters are not supported anymore, please migrate to conversion functions.");
+		   ROS_FATAL_STREAM(reason);
+		   throw std::invalid_argument(reason);
+	   }
+
+	   if(options.hasMember("pos_to_device")) p2d = (const std::string&) options["pos_to_device"];
+	   if(options.hasMember("pos_from_device")) p2r = (const std::string&) options["pos_from_device"];
+
+	   if(options.hasMember("vel_to_device")) v2d = (const std::string&) options["vel_to_device"];
+	   if(options.hasMember("vel_from_device")) v2r = (const std::string&) options["vel_from_device"];
+
+	   if(options.hasMember("eff_to_device")) e2d = (const std::string&) options["eff_to_device"];
+	   if(options.hasMember("eff_from_device")) e2r = (const std::string&) options["eff_from_device"];
+	   
+	   std::cout << "Vel to device: " << v2d << std::endl;	//added for debugging 03/17
+	   
+	   conv_target_pos_.reset(new UnitConverter(p2d, std::bind(assignVariable, "pos", &cmd_pos_, std::placeholders::_1)));
+	   conv_target_vel_.reset(new UnitConverter(v2d, std::bind(assignVariable, "vel", &cmd_vel_, std::placeholders::_1)));
+	   conv_target_eff_.reset(new UnitConverter(e2d, std::bind(assignVariable, "eff", &cmd_eff_, std::placeholders::_1)));
+
+	   std::cout << "Conv_target_vel is: " << &conv_target_vel_ << std::endl;
+
+	   conv_pos_.reset(new UnitConverter(p2r, std::bind(&ObjectVariables::getVariable, &variables_, std::placeholders::_1)));
+	   conv_vel_.reset(new UnitConverter(v2r, std::bind(&ObjectVariables::getVariable, &variables_, std::placeholders::_1)));
+	   conv_eff_.reset(new UnitConverter(e2r, std::bind(&ObjectVariables::getVariable, &variables_, std::placeholders::_1)));
+	   std::cout << "HandleLayer.cpp: Line 59" << std::endl;
    }
+   else
+   {
+       std::string p2d("rint(rad2deg(pos)*1000)"), v2d("rint(rad2deg(vel)*1000)"), e2d("rint(eff)");    //These are unnecessary
+	   std::string p2r("deg2rad(obj6864)/1000"), v2r("deg2rad(obj686C)/1000"), e2r("0");
 
-   if(options.hasMember("pos_to_device")) p2d = (const std::string&) options["pos_to_device"];
-   if(options.hasMember("pos_from_device")) p2r = (const std::string&) options["pos_from_device"];
+	   if(options.hasMember("pos_unit_factor") || options.hasMember("vel_unit_factor") || options.hasMember("eff_unit_factor")){
+		   const std::string reason("*_unit_factor parameters are not supported anymore, please migrate to conversion functions.");
+		   ROS_FATAL_STREAM(reason);
+		   throw std::invalid_argument(reason);
+	   }
 
-   if(options.hasMember("vel_to_device")) v2d = (const std::string&) options["vel_to_device"];
-   if(options.hasMember("vel_from_device")) v2r = (const std::string&) options["vel_from_device"];
+	   if(options.hasMember("pos_to_device_2")) p2d = (const std::string&) options["pos_to_device_2"];
+	   if(options.hasMember("pos_from_device_2")) p2r = (const std::string&) options["pos_from_device_2"];
 
-   if(options.hasMember("eff_to_device")) e2d = (const std::string&) options["eff_to_device"];
-   if(options.hasMember("eff_from_device")) e2r = (const std::string&) options["eff_from_device"];
+	   if(options.hasMember("vel_to_device_2")) v2d = (const std::string&) options["vel_to_device_2"];
+	   if(options.hasMember("vel_from_device_2")) v2r = (const std::string&) options["vel_from_device_2"];
 
-   conv_target_pos_.reset(new UnitConverter(p2d, std::bind(assignVariable, "pos", &cmd_pos_, std::placeholders::_1)));
-   conv_target_vel_.reset(new UnitConverter(v2d, std::bind(assignVariable, "vel", &cmd_vel_, std::placeholders::_1)));
-   conv_target_eff_.reset(new UnitConverter(e2d, std::bind(assignVariable, "eff", &cmd_eff_, std::placeholders::_1)));
+	   if(options.hasMember("eff_to_device_2")) e2d = (const std::string&) options["eff_to_device_2"];
+	   if(options.hasMember("eff_from_device_2")) e2r = (const std::string&) options["eff_from_device_2"];
+	   
+	   std::cout << "Vel to device: " << v2d << std::endl;	//added for debugging 03/17
 
-   conv_pos_.reset(new UnitConverter(p2r, std::bind(&ObjectVariables::getVariable, &variables_, std::placeholders::_1)));
-   conv_vel_.reset(new UnitConverter(v2r, std::bind(&ObjectVariables::getVariable, &variables_, std::placeholders::_1)));
-   conv_eff_.reset(new UnitConverter(e2r, std::bind(&ObjectVariables::getVariable, &variables_, std::placeholders::_1)));
+        //The placeholder is the argument that is passed to bound function. This argument is a string that says vel,eff,pos to tell which command to assign
+	   conv_target_pos_.reset(new UnitConverter(p2d, std::bind(assignVariable, "pos", &cmd_pos_, std::placeholders::_1)));
+	   conv_target_vel_.reset(new UnitConverter(v2d, std::bind(assignVariable, "vel", &cmd_vel_, std::placeholders::_1)));
+	   conv_target_eff_.reset(new UnitConverter(e2d, std::bind(assignVariable, "eff", &cmd_eff_, std::placeholders::_1)));
+
+	   std::cout << "Conv_target_vel is: " << &conv_target_vel_ << std::endl;
+
+	   conv_pos_.reset(new UnitConverter(p2r, std::bind(&ObjectVariables::getVariable, &variables_, std::placeholders::_1)));
+	   conv_vel_.reset(new UnitConverter(v2r, std::bind(&ObjectVariables::getVariable, &variables_, std::placeholders::_1)));
+	   conv_eff_.reset(new UnitConverter(e2r, std::bind(&ObjectVariables::getVariable, &variables_, std::placeholders::_1)));
+	   std::cout << "HandleLayer.cpp: Line 59" << std::endl;
+   }
 }
 
 HandleLayer::CanSwitchResult HandleLayer::canSwitch(const MotorBase::OperationMode &m){
@@ -137,7 +185,7 @@ hardware_interface::JointHandle* HandleLayer::registerHandle(hardware_interface:
 
 void HandleLayer::handleRead(LayerStatus &status, const LayerState &current_state) {
     if(current_state > Shutdown){
-        variables_.sync();
+        variables_.sync();  //Appears to sync with the object storage so all of the objects called in the unit converter are correct
         filter_pos_.update(conv_pos_->evaluate(), pos_);
         filter_vel_.update(conv_vel_->evaluate(), vel_);
         filter_eff_.update(conv_eff_->evaluate(), eff_);
@@ -147,20 +195,25 @@ void HandleLayer::handleWrite(LayerStatus &status, const LayerState &current_sta
     if(current_state == Ready){
         hardware_interface::JointHandle* jh = 0;
         if(forward_command_) jh = jh_;
-
+		std::cout << "HandleWrite under HandleLayer.cpp: Line 159" << "\tcmd_vel_: " << cmd_vel_ << "\tcmd_eff_: " << cmd_eff_ << "\tcmd_pos_: " << cmd_pos_ << std::endl;
+        std::cout << "HandleWrite under HandleLayer.cpp: Line 160" << "\tvel_: " << vel_ << "\teff_: " << eff_ << "\tpos_: " << pos_ << std::endl;
         if(jh == &jph_){
+			std::cout << "Joint position Handle" << std::endl;
             motor_->setTarget(conv_target_pos_->evaluate());
             cmd_vel_ = vel_;
             cmd_eff_ = eff_;
         }else if(jh == &jvh_){
+			std::cout << "Joint velocity Handle" << std::endl;
             motor_->setTarget(conv_target_vel_->evaluate());
             cmd_pos_ = pos_;
             cmd_eff_ = eff_;
         }else if(jh == &jeh_){
+			std::cout << "Joint effort Handle" << std::endl;
             motor_->setTarget(conv_target_eff_->evaluate());
             cmd_pos_ = pos_;
             cmd_vel_ = vel_;
         }else{
+			std::cout << "Joint Handle Pointer: " << jh << std::endl;
             cmd_pos_ = pos_;
             cmd_vel_ = vel_;
             cmd_eff_ = eff_;

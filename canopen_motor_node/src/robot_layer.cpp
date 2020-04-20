@@ -10,6 +10,7 @@
 #include <canopen_motor_node/robot_layer.h>
 
 #include "interface_mapping.h"
+#include <iostream>	//added for debugging 03/20
 
 using namespace canopen;
 
@@ -71,7 +72,7 @@ void RobotLayer::handleInit(LayerStatus &status){
         }
         first_init_ = false;
     }
-    LayerGroupNoDiag::handleInit(status);
+    LayerGroupNoDiag::handleInit(status);   //Maybe initializes an entire group
 }
 
 void RobotLayer::enforce(const ros::Duration &period, bool reset){
@@ -105,6 +106,7 @@ public:
 };
 bool RobotLayer::prepareSwitch(const std::list<hardware_interface::ControllerInfo> &start_list, const std::list<hardware_interface::ControllerInfo> &stop_list) {
     // compile-time check for mode switching support in ros_control
+    std::cout << "Inside prepare Switch" << std::endl;
     (void) &hardware_interface::RobotHW::prepareSwitch; // please upgrade to ros_control/contoller_manager 0.9.4 or newer
 
     // stop handles
@@ -115,6 +117,8 @@ bool RobotLayer::prepareSwitch(const std::list<hardware_interface::ControllerInf
             return false;
         }
     }
+    
+    std::cout << "Start Handles Section" << std::endl;
 
     // start handles
     for (std::list<hardware_interface::ControllerInfo>::const_iterator controller_it = start_list.begin(); controller_it != start_list.end(); ++controller_it){
@@ -177,7 +181,9 @@ bool RobotLayer::prepareSwitch(const std::list<hardware_interface::ControllerInf
         }
         switch_map_.insert(std::make_pair(controller_it->name, to_switch));
     }
-
+	
+	std::cout << "Mode Switch Section" << std::endl;
+	
     // perform mode switches
     std::unordered_set<HandleLayerBaseSharedPtr > to_stop;
     std::vector<std::string> failed_controllers;
@@ -194,6 +200,7 @@ bool RobotLayer::prepareSwitch(const std::list<hardware_interface::ControllerInf
             it->handle->switchMode(MotorBase::No_Mode); // stop all
         }
         for(RobotLayer::SwitchContainer::iterator it = to_switch.begin(); it != to_switch.end(); ++it){
+            std::cout << "Inside for loop: " << controller_it->name << std::endl;
             if(!it->handle->switchMode(it->mode)){
                 failed_controllers.push_back(controller_it->name);
                 ROS_ERROR_STREAM("Could not switch one joint for " << controller_it->name << ", will stop all related joints and the controller.");
@@ -215,7 +222,9 @@ bool RobotLayer::prepareSwitch(const std::list<hardware_interface::ControllerInf
         stopControllers(failed_controllers);
         // will not return false here since this would prevent other controllers to be started and therefore lead to an inconsistent state
     }
-
+	
+	
+	std::cout << "Made it to end of prepare switch" << std::endl;
     return true;
 }
 

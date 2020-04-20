@@ -15,7 +15,7 @@ namespace canopen
 
 class State402{
 public:
-    enum StatusWord
+    enum StatusWord //This is the same, both motors will have individual status words
     {
         SW_Ready_To_Switch_On=0,
         SW_Switched_On=1,
@@ -34,7 +34,7 @@ public:
         SW_Manufacturer_specific1=14,
         SW_Manufacturer_specific2=15
     };
-    enum InternalState
+    enum InternalState  //402 nodes can take more different states
     {
         Unknown = 0,
         Start = 0,
@@ -47,8 +47,8 @@ public:
         Fault_Reaction_Active = 7,
         Fault = 8,
     };
-    InternalState getState();
-    InternalState read(uint16_t sw);
+    InternalState getState();   //Just a typical Getter
+    InternalState read(uint16_t sw);    //
     bool waitForNewState(const time_point &abstime, InternalState &state);
     State402() : state_(Unknown) {}
 private:
@@ -200,54 +200,7 @@ public:
     }
 };
 
-typedef ModeForwardHelper<MotorBase::Profiled_Velocity, int32_t, 0x60FF, 0, 0> ProfiledVelocityMode;
-typedef ModeForwardHelper<MotorBase::Profiled_Torque, int16_t, 0x6071, 0, 0> ProfiledTorqueMode;
-typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Position, int32_t, 0x607A, 0, 0> CyclicSynchronousPositionMode;
-typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Velocity, int32_t, 0x60FF, 0, 0> CyclicSynchronousVelocityMode;
-typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Torque, int16_t, 0x6071, 0, 0> CyclicSynchronousTorqueMode;
-typedef ModeForwardHelper<MotorBase::Velocity, int16_t, 0x6042, 0, (1<<Command402::CW_Operation_mode_specific0)|(1<<Command402::CW_Operation_mode_specific1)|(1<<Command402::CW_Operation_mode_specific2)> VelocityMode;
-typedef ModeForwardHelper<MotorBase::Interpolated_Position, int32_t, 0x60C1, 0x01, (1<<Command402::CW_Operation_mode_specific0)> InterpolatedPositionMode;
-
-class ProfiledPositionMode : public ModeTargetHelper<int32_t> {
-    canopen::ObjectStorage::Entry<int32_t> target_position_;
-    double last_target_;
-    uint16_t sw_;
-public:
-    enum SW_masks {
-        MASK_Reached = (1<<State402::SW_Target_reached),
-        MASK_Acknowledged = (1<<State402::SW_Operation_mode_specific0),
-        MASK_Error = (1<<State402::SW_Operation_mode_specific1),
-    };
-    enum CW_bits {
-        CW_NewPoint =  Command402::CW_Operation_mode_specific0,
-        CW_Immediate =  Command402::CW_Operation_mode_specific1,
-        CW_Blending =  Command402::CW_Operation_mode_specific3,
-    };
-    ProfiledPositionMode(ObjectStorageSharedPtr storage) : ModeTargetHelper(MotorBase::Profiled_Position) {
-        storage->entry(target_position_, 0x607A);
-    }
-    virtual bool start() { sw_ = 0; last_target_= std::numeric_limits<double>::quiet_NaN(); return ModeTargetHelper::start(); }
-    virtual bool read(const uint16_t &sw) { sw_ = sw; return (sw & MASK_Error) == 0; }
-    virtual bool write(OpModeAccesser& cw) {
-        cw.set(CW_Immediate);
-        if(hasTarget()){
-            int32_t target = getTarget();
-            if((sw_ & MASK_Acknowledged) == 0 && target != last_target_){
-                if(cw.get(CW_NewPoint)){
-                    cw.reset(CW_NewPoint); // reset if needed
-                }else{
-                    target_position_.set(target);
-                    cw.set(CW_NewPoint);
-                    last_target_ = target;
-                }
-            } else if (sw_ & MASK_Acknowledged){
-                cw.reset(CW_NewPoint);
-            }
-            return true;
-        }
-        return false;
-    }
-};
+//This is where the original TypeDef's were, they were moved on 03/24
 
 class HomingMode: public Mode{
 protected:
@@ -263,31 +216,9 @@ public:
     virtual bool executeHoming(canopen::LayerStatus &status) = 0;
 };
 
-class DefaultHomingMode: public HomingMode{
-    canopen::ObjectStorage::Entry<int8_t> homing_method_;
-    std::atomic<bool> execute_;
+//class DefaultHomingMode was here, it was moved on 03/24
 
-    boost::mutex mutex_;
-    boost::condition_variable cond_;
-    uint16_t status_;
-
-    enum SW_masks {
-        MASK_Reached = (1<<State402::SW_Target_reached),
-        MASK_Attained = (1<<SW_Attained),
-        MASK_Error = (1<<SW_Error),
-    };
-    bool error(canopen::LayerStatus &status, const std::string& msg) { execute_= false; status.error(msg); return false; }
-public:
-    DefaultHomingMode(ObjectStorageSharedPtr storage) {
-        storage->entry(homing_method_, 0x6098);
-    }
-    virtual bool start();
-    virtual bool read(const uint16_t &sw);
-    virtual bool write(OpModeAccesser& cw);
-
-    virtual bool executeHoming(canopen::LayerStatus &status);
-};
-
+//Duplicate this class with name Motor4022, typedef the needed variables inside the scope of the class
 class Motor402 : public MotorBase
 {
 public:
@@ -298,15 +229,18 @@ public:
       monitor_mode_(settings.get_optional<bool>("monitor_mode", true)),
       state_switch_timeout_(settings.get_optional<unsigned int>("state_switch_timeout", 5))
     {
-        storage->entry(status_word_entry_, 0x6041);
-        storage->entry(control_word_entry_, 0x6040);
-        storage->entry(op_mode_display_, 0x6061);
-        storage->entry(op_mode_, 0x6060);
+
+/*      This section of code was moved into the duplicate classes
+        storage->entry(status_word_entry_, 0x6841);
+        storage->entry(control_word_entry_, 0x6840);
+        storage->entry(op_mode_display_, 0x6861);
+        storage->entry(op_mode_, 0x6860);
         try{
-            storage->entry(supported_drive_modes_, 0x6502);
+            storage->entry(supported_drive_modes_, 0x6D02);
         }
         catch(...){
         }
+*/
     }
 
     virtual bool setTarget(double val);
@@ -321,22 +255,14 @@ public:
         })).second;
     }
 
-    virtual void registerDefaultModes(ObjectStorageSharedPtr storage){
-        registerMode<ProfiledPositionMode> (MotorBase::Profiled_Position, storage);
-        registerMode<VelocityMode> (MotorBase::Velocity, storage);
-        registerMode<ProfiledVelocityMode> (MotorBase::Profiled_Velocity, storage);
-        registerMode<ProfiledTorqueMode> (MotorBase::Profiled_Torque, storage);
-        registerMode<DefaultHomingMode> (MotorBase::Homing, storage);
-        registerMode<InterpolatedPositionMode> (MotorBase::Interpolated_Position, storage);
-        registerMode<CyclicSynchronousPositionMode> (MotorBase::Cyclic_Synchronous_Position, storage);
-        registerMode<CyclicSynchronousVelocityMode> (MotorBase::Cyclic_Synchronous_Velocity, storage);
-        registerMode<CyclicSynchronousTorqueMode> (MotorBase::Cyclic_Synchronous_Torque, storage);
-    }
+//This used to be for registering all modes, it was moved to the next layer Motor_1 & Motor_2
+    virtual void registerDefaultModes(ObjectStorageSharedPtr storage) = 0;
 
-    class Allocator : public MotorBase::Allocator{
-    public:
-        virtual MotorBaseSharedPtr allocate(const std::string &name, ObjectStorageSharedPtr storage, const canopen::Settings &settings);
-    };
+	//Class allocator used to be here but was moved to the nodes
+
+    //DefaultHomingMode was moved into this class from line 219 on 03/24 to create a second class+
+
+
 protected:
     virtual void handleRead(LayerStatus &status, const LayerState &current_state);
     virtual void handleWrite(LayerStatus &status, const LayerState &current_state);
@@ -345,8 +271,16 @@ protected:
     virtual void handleShutdown(LayerStatus &status);
     virtual void handleHalt(LayerStatus &status);
     virtual void handleRecover(LayerStatus &status);
+    
+    //These were moved from private to protected to be used in child class
+    canopen::ObjectStorage::Entry<uint16_t>  status_word_entry_;
+    canopen::ObjectStorage::Entry<uint16_t >  control_word_entry_;
+    canopen::ObjectStorage::Entry<int8_t>  op_mode_display_;
+    canopen::ObjectStorage::Entry<int8_t>  op_mode_;
+    canopen::ObjectStorage::Entry<uint32_t>  supported_drive_modes_;
 
 private:
+
     virtual bool isModeSupportedByDevice(uint16_t mode);
     void registerMode(uint16_t id, const ModeSharedPtr &m);
 
@@ -378,11 +312,227 @@ private:
     const bool monitor_mode_;
     const boost::chrono::seconds state_switch_timeout_;
 
-    canopen::ObjectStorage::Entry<uint16_t>  status_word_entry_;
-    canopen::ObjectStorage::Entry<uint16_t >  control_word_entry_;
-    canopen::ObjectStorage::Entry<int8_t>  op_mode_display_;
-    canopen::ObjectStorage::Entry<int8_t>  op_mode_;
-    canopen::ObjectStorage::Entry<uint32_t>  supported_drive_modes_;
+};
+
+class Motor402_1 : public Motor402
+{
+public:
+    Motor402_1(const std::string &name, ObjectStorageSharedPtr storage, const canopen::Settings &settings) : Motor402(name, storage, settings)
+    {
+        storage->entry(status_word_entry_, 0x6041);
+        storage->entry(control_word_entry_, 0x6040);
+        storage->entry(op_mode_display_, 0x6061);
+        storage->entry(op_mode_, 0x6060);
+        try{
+            storage->entry(supported_drive_modes_, 0x6502);
+        }
+        catch(...){
+        }
+    }
+
+    virtual void registerDefaultModes(ObjectStorageSharedPtr storage){
+        registerMode<ProfiledPositionMode> (MotorBase::Profiled_Position, storage);
+        registerMode<VelocityMode> (MotorBase::Velocity, storage);
+        registerMode<ProfiledVelocityMode> (MotorBase::Profiled_Velocity, storage);
+        registerMode<ProfiledTorqueMode> (MotorBase::Profiled_Torque, storage);
+        registerMode<DefaultHomingMode> (MotorBase::Homing, storage);
+        registerMode<InterpolatedPositionMode> (MotorBase::Interpolated_Position, storage);
+        registerMode<CyclicSynchronousPositionMode> (MotorBase::Cyclic_Synchronous_Position, storage);
+        registerMode<CyclicSynchronousVelocityMode> (MotorBase::Cyclic_Synchronous_Velocity, storage);
+        registerMode<CyclicSynchronousTorqueMode> (MotorBase::Cyclic_Synchronous_Torque, storage);
+    }
+
+    class DefaultHomingMode: public HomingMode{
+        canopen::ObjectStorage::Entry<int8_t> homing_method_;
+        std::atomic<bool> execute_;
+
+        boost::mutex mutex_;
+        boost::condition_variable cond_;
+        uint16_t status_;
+
+        enum SW_masks {
+            MASK_Reached = (1<<State402::SW_Target_reached),
+            MASK_Attained = (1<<SW_Attained),
+            MASK_Error = (1<<SW_Error),
+        };
+        bool error(canopen::LayerStatus &status, const std::string& msg) { execute_= false; status.error(msg); return false; }
+    public:
+        DefaultHomingMode(ObjectStorageSharedPtr storage) {
+            storage->entry(homing_method_, 0x6098);
+        }
+        virtual bool start();
+        virtual bool read(const uint16_t &sw);
+        virtual bool write(OpModeAccesser& cw);
+
+        virtual bool executeHoming(canopen::LayerStatus &status);
+    };
+    
+    class Allocator : public MotorBase::Allocator{  //This is the Allocator class, VERY IMPORTANT
+    public:
+        virtual MotorBaseSharedPtr allocate(const std::string &name, ObjectStorageSharedPtr storage, const canopen::Settings &settings);
+    };
+
+private:
+    //These were moved into this class from line 203 on 03/24 to create a second class
+    typedef ModeForwardHelper<MotorBase::Profiled_Velocity, int32_t, 0x60FF, 0, 0> ProfiledVelocityMode;
+    typedef ModeForwardHelper<MotorBase::Profiled_Torque, int16_t, 0x6071, 0, 0> ProfiledTorqueMode;
+    typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Position, int32_t, 0x607A, 0, 0> CyclicSynchronousPositionMode;
+    typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Velocity, int32_t, 0x60FF, 0, 0> CyclicSynchronousVelocityMode;
+    typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Torque, int16_t, 0x6071, 0, 0> CyclicSynchronousTorqueMode;
+    typedef ModeForwardHelper<MotorBase::Velocity, int16_t, 0x6042, 0, (1<<Command402::CW_Operation_mode_specific0)|(1<<Command402::CW_Operation_mode_specific1)|(1<<Command402::CW_Operation_mode_specific2)> VelocityMode;
+    typedef ModeForwardHelper<MotorBase::Interpolated_Position, int32_t, 0x60C1, 0x01, (1<<Command402::CW_Operation_mode_specific0)> InterpolatedPositionMode;
+
+    class ProfiledPositionMode : public ModeTargetHelper<int32_t> {
+        canopen::ObjectStorage::Entry<int32_t> target_position_;
+        double last_target_;
+        uint16_t sw_;
+    public:
+        enum SW_masks {
+            MASK_Reached = (1<<State402::SW_Target_reached),
+            MASK_Acknowledged = (1<<State402::SW_Operation_mode_specific0),
+            MASK_Error = (1<<State402::SW_Operation_mode_specific1),
+        };
+        enum CW_bits {
+            CW_NewPoint =  Command402::CW_Operation_mode_specific0,
+            CW_Immediate =  Command402::CW_Operation_mode_specific1,
+            CW_Blending =  Command402::CW_Operation_mode_specific3,
+        };
+        ProfiledPositionMode(ObjectStorageSharedPtr storage) : ModeTargetHelper(MotorBase::Profiled_Position) {
+            storage->entry(target_position_, 0x607A);
+        }
+        virtual bool start() { sw_ = 0; last_target_= std::numeric_limits<double>::quiet_NaN(); return ModeTargetHelper::start(); }
+        virtual bool read(const uint16_t &sw) { sw_ = sw; return (sw & MASK_Error) == 0; }
+        virtual bool write(OpModeAccesser& cw) {
+            cw.set(CW_Immediate);
+            if(hasTarget()){
+                int32_t target = getTarget();
+                if((sw_ & MASK_Acknowledged) == 0 && target != last_target_){
+                    if(cw.get(CW_NewPoint)){
+                        cw.reset(CW_NewPoint); // reset if needed
+                    }else{
+                        target_position_.set(target);
+                        cw.set(CW_NewPoint);
+                        last_target_ = target;
+                    }
+                } else if (sw_ & MASK_Acknowledged){
+                    cw.reset(CW_NewPoint);
+                }
+                return true;
+            }
+            return false;
+        }
+    };
+
+};
+
+class Motor402_2 : public Motor402
+{
+public:
+    Motor402_2(const std::string &name, ObjectStorageSharedPtr storage, const canopen::Settings &settings) : Motor402(name, storage, settings)
+    {
+        storage->entry(status_word_entry_, 0x6841);
+        storage->entry(control_word_entry_, 0x6840);
+        storage->entry(op_mode_display_, 0x6861);
+        storage->entry(op_mode_, 0x6860);
+        try{
+            storage->entry(supported_drive_modes_, 0x6D02);
+        }
+        catch(...){
+        }
+    }
+
+    virtual void registerDefaultModes(ObjectStorageSharedPtr storage){
+        registerMode<ProfiledPositionMode> (MotorBase::Profiled_Position, storage);
+        registerMode<VelocityMode> (MotorBase::Velocity, storage);
+        registerMode<ProfiledVelocityMode> (MotorBase::Profiled_Velocity, storage);
+        registerMode<ProfiledTorqueMode> (MotorBase::Profiled_Torque, storage);
+        registerMode<DefaultHomingMode> (MotorBase::Homing, storage);
+        registerMode<InterpolatedPositionMode> (MotorBase::Interpolated_Position, storage);
+        registerMode<CyclicSynchronousPositionMode> (MotorBase::Cyclic_Synchronous_Position, storage);
+        registerMode<CyclicSynchronousVelocityMode> (MotorBase::Cyclic_Synchronous_Velocity, storage);
+        registerMode<CyclicSynchronousTorqueMode> (MotorBase::Cyclic_Synchronous_Torque, storage);
+    }
+
+    class DefaultHomingMode: public HomingMode{
+        canopen::ObjectStorage::Entry<int8_t> homing_method_;
+        std::atomic<bool> execute_;
+
+        boost::mutex mutex_;
+        boost::condition_variable cond_;
+        uint16_t status_;
+
+        enum SW_masks {
+            MASK_Reached = (1<<State402::SW_Target_reached),
+            MASK_Attained = (1<<SW_Attained),
+            MASK_Error = (1<<SW_Error),
+        };
+        bool error(canopen::LayerStatus &status, const std::string& msg) { execute_= false; status.error(msg); return false; }
+    public:
+        DefaultHomingMode(ObjectStorageSharedPtr storage) {
+            storage->entry(homing_method_, 0x6898);
+        }
+        virtual bool start();
+        virtual bool read(const uint16_t &sw);
+        virtual bool write(OpModeAccesser& cw);
+
+        virtual bool executeHoming(canopen::LayerStatus &status);
+    };
+    
+    class Allocator : public MotorBase::Allocator{  //This is the Allocator class, VERY IMPORTANT
+    public:
+        virtual MotorBaseSharedPtr allocate(const std::string &name, ObjectStorageSharedPtr storage, const canopen::Settings &settings);
+    };
+    
+private:
+    //These were moved into this class from line 203 on 03/24 to create a second class
+    typedef ModeForwardHelper<MotorBase::Profiled_Velocity, int32_t, 0x68FF, 0, 0> ProfiledVelocityMode;
+    typedef ModeForwardHelper<MotorBase::Profiled_Torque, int16_t, 0x6871, 0, 0> ProfiledTorqueMode;
+    typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Position, int32_t, 0x687A, 0, 0> CyclicSynchronousPositionMode;
+    typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Velocity, int32_t, 0x68FF, 0, 0> CyclicSynchronousVelocityMode;
+    typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Torque, int16_t, 0x6871, 0, 0> CyclicSynchronousTorqueMode;
+    typedef ModeForwardHelper<MotorBase::Velocity, int16_t, 0x6842, 0, (1<<Command402::CW_Operation_mode_specific0)|(1<<Command402::CW_Operation_mode_specific1)|(1<<Command402::CW_Operation_mode_specific2)> VelocityMode;
+    typedef ModeForwardHelper<MotorBase::Interpolated_Position, int32_t, 0x68C1, 0x01, (1<<Command402::CW_Operation_mode_specific0)> InterpolatedPositionMode;
+
+    class ProfiledPositionMode : public ModeTargetHelper<int32_t> {
+        canopen::ObjectStorage::Entry<int32_t> target_position_;
+        double last_target_;
+        uint16_t sw_;
+    public:
+        enum SW_masks {
+            MASK_Reached = (1<<State402::SW_Target_reached),
+            MASK_Acknowledged = (1<<State402::SW_Operation_mode_specific0),
+            MASK_Error = (1<<State402::SW_Operation_mode_specific1),
+        };
+        enum CW_bits {
+            CW_NewPoint =  Command402::CW_Operation_mode_specific0,
+            CW_Immediate =  Command402::CW_Operation_mode_specific1,
+            CW_Blending =  Command402::CW_Operation_mode_specific3,
+        };
+        ProfiledPositionMode(ObjectStorageSharedPtr storage) : ModeTargetHelper(MotorBase::Profiled_Position) {
+            storage->entry(target_position_, 0x687A);
+        }
+        virtual bool start() { sw_ = 0; last_target_= std::numeric_limits<double>::quiet_NaN(); return ModeTargetHelper::start(); }
+        virtual bool read(const uint16_t &sw) { sw_ = sw; return (sw & MASK_Error) == 0; }
+        virtual bool write(OpModeAccesser& cw) {
+            cw.set(CW_Immediate);
+            if(hasTarget()){
+                int32_t target = getTarget();
+                if((sw_ & MASK_Acknowledged) == 0 && target != last_target_){
+                    if(cw.get(CW_NewPoint)){
+                        cw.reset(CW_NewPoint); // reset if needed
+                    }else{
+                        target_position_.set(target);
+                        cw.set(CW_NewPoint);
+                        last_target_ = target;
+                    }
+                } else if (sw_ & MASK_Acknowledged){
+                    cw.reset(CW_NewPoint);
+                }
+                return true;
+            }
+            return false;
+        }
+    };
 };
 
 }

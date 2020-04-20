@@ -26,9 +26,9 @@ private:
 
 
 MotorChain::MotorChain(const ros::NodeHandle &nh, const ros::NodeHandle &nh_priv) :
-        RosChain(nh, nh_priv), motor_allocator_("canopen_402", "canopen::MotorBase::Allocator") {}
+        RosChain(nh, nh_priv), motor_allocator_("canopen_402", "canopen::MotorBase::Allocator") {}  //Allocator arguments are (package, base_class)
 
-bool MotorChain::nodeAdded(XmlRpc::XmlRpcValue &params, const canopen::NodeSharedPtr &node, const LoggerSharedPtr &logger)
+bool MotorChain::nodeAdded(XmlRpc::XmlRpcValue &params, const canopen::NodeSharedPtr &node, const LoggerSharedPtr &logger)	//Modified on 03/27 to include 2 motors
 {
     std::string name = params["name"];
     std::string &joint = name;
@@ -65,7 +65,7 @@ bool MotorChain::nodeAdded(XmlRpc::XmlRpcValue &params, const canopen::NodeShare
     motors_->add(motor);
     logger->add(motor);
 
-    HandleLayerSharedPtr handle = std::make_shared<HandleLayer>(joint, motor, node->getStorage(), params);
+    HandleLayerSharedPtr handle = std::make_shared<HandleLayer>(joint, motor, node->getStorage(), params, false);
 
     canopen::LayerStatus s;
     if(!handle->prepareFilters(s)){
@@ -73,8 +73,69 @@ bool MotorChain::nodeAdded(XmlRpc::XmlRpcValue &params, const canopen::NodeShare
         return false;
     }
 
-    robot_layer_->add(joint, handle);
+    robot_layer_->add(joint, handle);   //This is hardware interface stuff
     logger->add(handle);
+    
+    
+
+
+
+
+
+    
+	if(params.hasMember("joint_2"))
+	{
+		joint.assign(params["joint_2"]);
+
+		if(!robot_layer_->getJoint(joint)){
+			ROS_ERROR_STREAM("joint " + joint + " was not found in URDF");
+			return false;
+		}
+
+		std::string alloc_name = "canopen::Motor_2::Allocator";
+		if(params.hasMember("motor_allocator_2")) alloc_name.assign(params["motor_allocator_2"]);
+
+		//XmlRpcSettings settings; already declared
+		if(params.hasMember("motor_layer_2")) settings = params["motor_layer_2"];
+
+		//MotorBaseSharedPtr motor; already declared
+
+		try{
+			motor = motor_allocator_.allocateInstance(alloc_name, name + "_motor_2", node->getStorage(), settings);	//node->getStorage() has not changed, I think this is a good thing
+		}
+		catch( const std::exception &e){
+			std::string info = boost::diagnostic_information(e);
+			ROS_ERROR_STREAM(info);
+			return false;
+		}
+
+		if(!motor){
+			ROS_ERROR_STREAM("Could not allocate motor.");
+			return false;
+		}
+
+		motor->registerDefaultModes(node->getStorage());
+		motors_->add(motor);
+		logger->add(motor);
+
+		//HandleLayerSharedPtr already declared
+		handle = std::make_shared<HandleLayer>(joint, motor, node->getStorage(), params, true);	//This line might need removed, Don't know exactly what it does
+
+		//canopen::LayerStatus s; already declared
+		if(!handle->prepareFilters(s)){
+			ROS_ERROR_STREAM(s.reason());
+			return false;
+		}
+
+		robot_layer_->add(joint, handle);
+		logger->add(handle);
+    }
+    
+
+
+
+
+
 
     return true;
 }
@@ -84,7 +145,7 @@ bool MotorChain::setup_chain() {
     robot_layer_.reset(new RobotLayer(nh_));
 
     ros::Duration dur(0.0) ;
-
+	std::cout << "Motor_Chain: line 87" << std::endl;
     if(RosChain::setup_chain()){
         add(motors_);
         add(robot_layer_);
@@ -97,7 +158,7 @@ bool MotorChain::setup_chain() {
         }
         cm_.reset(new ControllerManagerLayer(robot_layer_, nh_, dur));
         add(cm_);
-
+		std::cout << "Motor_Chain: line 100" << std::endl;
         return true;
     }
 

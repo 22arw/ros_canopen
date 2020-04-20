@@ -32,17 +32,19 @@ class ObjectVariables {
     struct Getter {
         std::shared_ptr<double> val_ptr;
         std::function<bool(double&)> func;
+        //I am finally learning. This is operator overloading!
+        //This is the operator called below in bool sync
         bool operator ()() { return func(*val_ptr); }
         template<typename T> Getter(const ObjectStorage::Entry<T> &entry): func(std::bind(&Getter::readObject<T>, entry, std::placeholders::_1)), val_ptr(new double) { }
         template<typename T> static bool readObject(ObjectStorage::Entry<T> &entry, double &res){
             T val;
-            if(!entry.get(val)) return false;
+            if(!entry.get(val)) return false;   //entry is a component of object storage
             res = val;
             return true;
         }
         operator double*() const { return val_ptr.get(); }
     };
-    typedef std::unordered_map<ObjectDict::Key, Getter, ObjectDict::KeyHash> GetterMap;
+    typedef std::unordered_map<ObjectDict::Key, Getter, ObjectDict::KeyHash> GetterMap; //The second object 'Getter' is a function call of sorts
     GetterMap getters_;
     boost::mutex mutex_;
 public:
@@ -51,10 +53,10 @@ public:
         return list.getters_.insert(std::make_pair(key, Getter(list.storage_->entry<type>(key)))).first->second;
     }
     ObjectVariables(const ObjectStorageSharedPtr storage) : storage_(storage) {}
-    bool sync(){
+    bool sync(){    //This appears to get information from object storage
         boost::mutex::scoped_lock lock(mutex_);
         bool ok = true;
-        for(GetterMap::iterator it = getters_.begin(); it != getters_.end(); ++it){
+        for(GetterMap::iterator it = getters_.begin(); it != getters_.end(); ++it){ //THIS IS SUPER IMPORTANT, I BELIEVE THIS CALLS THE READING
             ok = it->second() && ok;
         }
         return ok;
@@ -85,6 +87,7 @@ template<> inline double* ObjectVariables::func<canopen::ObjectDict::DEFTYPE_DOM
 class HandleLayer: public canopen::HandleLayerBase {
     canopen::MotorBaseSharedPtr motor_;
     double pos_, vel_, eff_;
+    bool is_motor_2;	//Checks whether or not this is the motor 2 or 1 on dual axes drive
 
     double cmd_pos_, cmd_vel_, cmd_eff_;
 
@@ -126,7 +129,7 @@ class HandleLayer: public canopen::HandleLayerBase {
     std::vector<LimitsHandleBaseSharedPtr> limits_;
     bool enable_limits_;
 public:
-    HandleLayer(const std::string &name, const canopen::MotorBaseSharedPtr & motor, const canopen::ObjectStorageSharedPtr storage,  XmlRpc::XmlRpcValue & options);
+    HandleLayer(const std::string &name, const canopen::MotorBaseSharedPtr & motor, const canopen::ObjectStorageSharedPtr storage,  XmlRpc::XmlRpcValue & options, bool is_motor_2);
     static double * assignVariable(const std::string &name, double * ptr, const std::string &req) { return name == req ? ptr : 0; }
 
     CanSwitchResult canSwitch(const canopen::MotorBase::OperationMode &m);
@@ -152,8 +155,8 @@ public:
     bool prepareFilters(canopen::LayerStatus &status);
 
 private:
-    virtual void handleRead(canopen::LayerStatus &status, const LayerState &current_state);
-    virtual void handleWrite(canopen::LayerStatus &status, const LayerState &current_state);
+    virtual void handleRead(canopen::LayerStatus &status, const LayerState &current_state); //This is likely called in a loop
+    virtual void handleWrite(canopen::LayerStatus &status, const LayerState &current_state);    //This is likely called in a loop
     virtual void handleInit(canopen::LayerStatus &status);
     virtual void handleDiag(canopen::LayerReport &report) { /* nothing to do */ }
     virtual void handleShutdown(canopen::LayerStatus &status) { /* nothing to do */ }

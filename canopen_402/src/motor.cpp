@@ -1,5 +1,6 @@
 #include <canopen_402/motor.h>
 #include <boost/thread/reverse_lock.hpp>
+#include <iostream>
 
 namespace canopen
 {
@@ -164,11 +165,15 @@ template<uint16_t mask, uint16_t not_equal> struct masked_status_not_equal {
     masked_status_not_equal(uint16_t &status) : status_(status) {}
     bool operator()() const { return (status_ & mask) != not_equal; }
 };
-bool DefaultHomingMode::start() {
+
+//template<typename T>	//This was added for testing on 03/24 to instantiate two different classes
+bool Motor402_1::DefaultHomingMode::start() {
     execute_ = false;
     return read(0);
 }
-bool DefaultHomingMode::read(const uint16_t &sw) {
+
+//template<typename T>	//This was added for testing on 03/24 to instantiate two different classes
+bool Motor402_1::DefaultHomingMode::read(const uint16_t &sw) {
     boost::mutex::scoped_lock lock(mutex_);
     uint16_t old = status_;
     status_ = sw & (MASK_Reached | MASK_Attained | MASK_Error);
@@ -177,7 +182,9 @@ bool DefaultHomingMode::read(const uint16_t &sw) {
     }
     return true;
 }
-bool DefaultHomingMode::write(Mode::OpModeAccesser& cw) {
+
+//template<typename T>	//This was added for testing on 03/24 to instantiate two different classes
+bool Motor402_1::DefaultHomingMode::write(Mode::OpModeAccesser& cw) {
     cw = 0;
     if(execute_){
         cw.set(CW_StartHoming);
@@ -186,7 +193,8 @@ bool DefaultHomingMode::write(Mode::OpModeAccesser& cw) {
     return false;
 }
 
-bool DefaultHomingMode::executeHoming(canopen::LayerStatus &status) {
+//template<typename T>	//This was added for testing on 03/24 to instantiate two different classes
+bool Motor402_1::DefaultHomingMode::executeHoming(canopen::LayerStatus &status) {
     if(!homing_method_.valid()){
         return error(status, "homing method entry is not valid");
     }
@@ -240,6 +248,90 @@ bool DefaultHomingMode::executeHoming(canopen::LayerStatus &status) {
 
     return error(status, "something went wrong while homing");
 }
+
+//template<typename T>	//This was added for testing on 03/24 to instantiate two different classes
+bool Motor402_2::DefaultHomingMode::start() {
+    execute_ = false;
+    return read(0);
+}
+
+//template<typename T>	//This was added for testing on 03/24 to instantiate two different classes
+bool Motor402_2::DefaultHomingMode::read(const uint16_t &sw) {
+    boost::mutex::scoped_lock lock(mutex_);
+    uint16_t old = status_;
+    status_ = sw & (MASK_Reached | MASK_Attained | MASK_Error);
+    if(old != status_){
+        cond_.notify_all();
+    }
+    return true;
+}
+
+//template<typename T>	//This was added for testing on 03/24 to instantiate two different classes
+bool Motor402_2::DefaultHomingMode::write(Mode::OpModeAccesser& cw) {
+    cw = 0;
+    if(execute_){
+        cw.set(CW_StartHoming);
+        return true;
+    }
+    return false;
+}
+
+//template<typename T>	//This was added for testing on 03/24 to instantiate two different classes
+bool Motor402_2::DefaultHomingMode::executeHoming(canopen::LayerStatus &status) {
+    if(!homing_method_.valid()){
+        return error(status, "homing method entry is not valid");
+    }
+
+    if(homing_method_.get_cached() == 0){
+        return true;
+    }
+
+    time_point prepare_time = get_abs_time(boost::chrono::seconds(1));
+    // ensure homing is not running
+    boost::mutex::scoped_lock lock(mutex_);
+    if(!cond_.wait_until(lock, prepare_time, masked_status_not_equal<MASK_Error | MASK_Reached, 0> (status_))){
+        return error(status, "could not prepare homing");
+    }
+    if(status_ & MASK_Error){
+        return error(status, "homing error before start");
+    }
+
+    execute_ = true;
+
+    // ensure start
+    if(!cond_.wait_until(lock, prepare_time, masked_status_not_equal<MASK_Error | MASK_Attained | MASK_Reached, MASK_Reached> (status_))){
+        return error(status, "homing did not start");
+    }
+    if(status_ & MASK_Error){
+        return error(status, "homing error at start");
+    }
+
+    time_point finish_time = get_abs_time(boost::chrono::seconds(10)); //
+
+    // wait for attained
+    if(!cond_.wait_until(lock, finish_time, masked_status_not_equal<MASK_Error | MASK_Attained, 0> (status_))){
+        return error(status, "homing not attained");
+    }
+    if(status_ & MASK_Error){
+        return error(status, "homing error during process");
+    }
+
+    // wait for motion stop
+    if(!cond_.wait_until(lock, finish_time, masked_status_not_equal<MASK_Error | MASK_Reached, 0> (status_))){
+        return error(status, "homing did not stop");
+    }
+    if(status_ & MASK_Error){
+        return error(status, "homing error during stop");
+    }
+
+    if((status_ & MASK_Reached) && (status_ & MASK_Attained)){
+        execute_ = false;
+        return true;
+    }
+
+    return error(status, "something went wrong while homing");
+}
+
 
 bool Motor402::setTarget(double val){
     if(state_handler_.getState() == State402::Operation_Enable){
@@ -468,26 +560,31 @@ void Motor402::handleDiag(LayerReport &report){
     }
 }
 void Motor402::handleInit(LayerStatus &status){
+	std::cout << "Motor.cpp line 472" << std::endl;	//added for debugging 03/16
     for(std::unordered_map<uint16_t, AllocFuncType>::iterator it = mode_allocators_.begin(); it != mode_allocators_.end(); ++it){
         (it->second)();
     }
 
     if(!readState(status, Init)){
         status.error("Could not read motor state");
+        std::cout << "Motor.cpp line 479" << std::endl;	//added for debugging 03/16
         return;
     }
     {
+		std::cout << "Motor.cpp line 483" << std::endl;	//added for debugging 03/16
         boost::mutex::scoped_lock lock(cw_mutex_);
         control_word_ = 0;
         start_fault_reset_ = true;
     }
     if(!switchState(status, State402::Operation_Enable)){
         status.error("Could not enable motor");
+        std::cout << "Motor.cpp line 490! However, could not enable motor" << std::endl;	//added for debugging 03/16
         return;
     }
-
+	std::cout << "Motor.cpp line 493" << std::endl;	//added for debugging 03/16
     ModeSharedPtr m = allocMode(MotorBase::Homing);
     if(!m){
+		std::cout << "Homing Not Supported" << std::endl;	//added for debugging 03/16
         return; // homing not supported
     }
 
@@ -497,7 +594,7 @@ void Motor402::handleInit(LayerStatus &status){
         status.error("Homing mode has incorrect handler");
         return;
     }
-
+	std::cout << "Motor.cpp line 502" << std::endl;	//added for debugging 03/16
     if(!switchMode(status, MotorBase::Homing)){
         status.error("Could not enter homing mode");
         return;
@@ -507,7 +604,7 @@ void Motor402::handleInit(LayerStatus &status){
         status.error("Homing failed");
         return;
     }
-
+	std::cout << "Motor.cpp line 511" << std::endl;	//added for debugging 03/16
     switchMode(status, No_Mode);
 }
 void Motor402::handleShutdown(LayerStatus &status){

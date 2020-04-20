@@ -1,4 +1,6 @@
 #include <ros/package.h>
+#include <typeinfo>
+#include <iostream>	//Added 03/04 for debugging
 
 #include <canopen_chain_node/ros_chain.h>
 
@@ -36,6 +38,7 @@ static PublishFuncType create(ros::NodeHandle &nh,  const std::string &name, Obj
     };
 }
 
+//This appears to just be used for debugging
 PublishFuncType createPublishFunc(ros::NodeHandle &nh,  const std::string &name, canopen::NodeSharedPtr node, const std::string &key, bool force){
     ObjectStorageSharedPtr s = node->getStorage();
 
@@ -69,7 +72,7 @@ void RosChain::logState(const can::State &s){
     ROS_INFO_STREAM("Current state: " << s.driver_state << " device error: " << s.error_code << " internal_error: " << s.internal_error << " (" << msg << ")");
 }
 
-void RosChain::run(){
+void RosChain::run(){   //This is simply a loop that reads layer status
     running_ = true;
     time_point abs_time = boost::chrono::high_resolution_clock::now();
     while(running_){
@@ -100,9 +103,9 @@ public:
     ~ResponseLogger() {
         if(!logged && !res.success){
             if (res.message.empty()){
-                ROS_ERROR_STREAM(command << " failed");
+                ROS_ERROR_STREAM(command << " failed (Hello)");
             }else{
-                ROS_ERROR_STREAM(command << " failed: " << res.message);
+                ROS_ERROR_STREAM(command << " failed:  " << res.message);
             }
             logged = true;
         }
@@ -115,15 +118,15 @@ public:
         ROS_INFO_STREAM(command << "...");
     }
     void logWarning() {
-        ROS_WARN_STREAM(command << " successful with warning(s): " << res.message);
+        ROS_WARN_STREAM(command << " successful with warning(s):  " << res.message);
         logged = true;
     }
     ~TriggerResponseLogger() {
         if(!logged && res.success){
             if (res.message.empty()){
-                ROS_INFO_STREAM(command << " successful");
+                ROS_INFO_STREAM(command << " successful ");
             }else{
-                ROS_INFO_STREAM(command << " successful: " << res.message);
+                ROS_INFO_STREAM(command << " successful:  " << res.message);
             }
             logged = true;
         }
@@ -131,14 +134,14 @@ public:
 };
 
 bool RosChain::handle_init(std_srvs::Trigger::Request  &req, std_srvs::Trigger::Response &res){
-    TriggerResponseLogger rl(res, "Initializing");
+    TriggerResponseLogger rl(res, "Initializing "); //This is used to send info to ROS stream
     boost::mutex::scoped_lock lock(mutex_);
     if(getLayerState() > Off){
         res.success = true;
         res.message = "already initialized";
         return true;
     }
-    thread_.reset(new boost::thread(&RosChain::run, this));
+    thread_.reset(new boost::thread(&RosChain::run, this)); //This is a thread to read the state
     LayerReport status;
     try{
         init(status);
@@ -149,6 +152,7 @@ bool RosChain::handle_init(std_srvs::Trigger::Request  &req, std_srvs::Trigger::
             res.message = status.reason();
         }else{
             heartbeat_timer_.restart();
+            std::cout << "Ros_chain init was successful ros_chain.cpp: line 154" << std::endl;	//added for debugging 03/16
             return true;
         }
     }
@@ -294,7 +298,7 @@ bool RosChain::setup_bus(){
     bus_nh.param("driver_plugin",driver_plugin, std::string("can::SocketCANInterface"));
 
     try{
-        interface_ =  driver_loader_.createInstance(driver_plugin);
+        interface_ =  driver_loader_.createInstance(driver_plugin); //Returns a shared pointer to the class
     }
 
     catch(pluginlib::PluginlibException& ex){
@@ -302,14 +306,15 @@ bool RosChain::setup_bus(){
         return false;
     }
 
-    state_listener_ = interface_->createStateListenerM(this, &RosChain::logState);
+    //This appears to be the state of the bus, making sure it is operational
+    state_listener_ = interface_->createStateListenerM(this, &RosChain::logState);  //Points the state listener at the following class method
 
     if(bus_nh.getParam("master_type",master_alloc)){
         ROS_ERROR("please migrate to master allocators");
         return false;
     }
 
-    bus_nh.param("master_allocator",master_alloc, std::string("canopen::SimpleMaster::Allocator"));
+    bus_nh.param("master_allocator",master_alloc, std::string("canopen::SimpleMaster::Allocator")); //Returns a shared pointer to the class
 
     try{
         master_= master_allocator_.allocateInstance(master_alloc, can_device, interface_);
@@ -326,7 +331,7 @@ bool RosChain::setup_bus(){
     }
 
     add(std::make_shared<CANLayer>(interface_, can_device, loopback));
-
+	std::cout << "\nThis was the interface ^";	//added 03/04 for debugging
     return true;
 }
 
@@ -374,6 +379,7 @@ bool RosChain::setup_sync(){
             return false;
         }
         add(sync_);
+        std::cout << "\nThis was the sync ^";	//added 03/04 for debugging	
     }
     return true;
 }
@@ -440,6 +446,7 @@ bool addLoggerEntries(XmlRpc::XmlRpcValue merged, const std::string param, uint8
 bool RosChain::setup_nodes(){
     nodes_.reset(new canopen::LayerGroupNoDiag<canopen::Node>("301 layer"));
     add(nodes_);
+    std::cout << "\nTHese are the nodes";	//added 03/04 for debugging
 
     emcy_handlers_.reset(new canopen::LayerGroupNoDiag<canopen::EMCYHandler>("EMCY layer"));
 
@@ -531,6 +538,7 @@ bool RosChain::setup_nodes(){
         LoggerSharedPtr logger = std::make_shared<Logger>(node);
 
         if(!nodeAdded(merged, node, logger)) return false;
+        std::cout << "Node added successfully" << std::endl;	//added for debugging 03/20
 
         if(!addLoggerEntries(merged, "log", diagnostic_updater::DiagnosticStatusWrapper::OK, *logger)) return false;
         if(!addLoggerEntries(merged, "log_warn", diagnostic_updater::DiagnosticStatusWrapper::WARN, *logger)) return false;
@@ -543,7 +551,10 @@ bool RosChain::setup_nodes(){
 
         if(merged.hasMember("publish")){
             try{
-                XmlRpc::XmlRpcValue objs = merged["publish"];
+                //ROS_ERROR_STREAM("Publish parameter type" << typeid(merged["publish"]).name());
+				//ROS_ERROR_STREAM(merged["publish"])
+				XmlRpc::XmlRpcValue objs = merged["publish"];
+				//ROS_ERROR_STREAM("HERE")
                 for(int i = 0; i < objs.size(); ++i){
                     std::pair<std::string, bool> obj_name = parseObjectName(objs[i]);
 
@@ -603,14 +614,16 @@ RosChain::RosChain(const ros::NodeHandle &nh, const ros::NodeHandle &nh_priv)
 bool RosChain::setup(){
     boost::mutex::scoped_lock lock(mutex_);
     bool okay = setup_chain();
+    std::cout << "\nChain Setup";	//added 03/04 for debugging
     if(okay) add(emcy_handlers_);
+    std::cout << "\nEMCY Setup ^";	//added 03/03 for debugging, i never make it to this line
     return okay;
 }
 
 bool RosChain::setup_chain(){
     std::string hw_id;
-    nh_priv_.param("hardware_id", hw_id, std::string("none"));
-    nh_priv_.param("reset_errors_before_recover", reset_errors_before_recover_, false);
+    nh_priv_.param("hardware_id", hw_id, std::string("none"));  //creates a parameter
+    nh_priv_.param("reset_errors_before_recover", reset_errors_before_recover_, false); //creates a parameter
 
     diag_updater_.setHardwareID(hw_id);
     diag_updater_.add("chain", this, &RosChain::report_diagnostics);
@@ -619,7 +632,7 @@ bool RosChain::setup_chain(){
 
     ros::NodeHandle nh_driver(nh_, "driver");
 
-    srv_init_ = nh_driver.advertiseService("init",&RosChain::handle_init, this);
+    srv_init_ = nh_driver.advertiseService("init",&RosChain::handle_init, this);    //Adds a callable service to the method in this class
     srv_recover_ = nh_driver.advertiseService("recover",&RosChain::handle_recover, this);
     srv_halt_ = nh_driver.advertiseService("halt",&RosChain::handle_halt, this);
     srv_shutdown_ = nh_driver.advertiseService("shutdown",&RosChain::handle_shutdown, this);

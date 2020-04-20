@@ -288,7 +288,7 @@ public:
 protected:
     class Data {
         Data(const Data&) = delete; // prevent copies
-        Data& operator=(const Data&) = delete;
+        Data& operator=(const Data&) = delete;  // prevent assgnments
 
         boost::mutex mutex;
         String buffer;

@@ -45,8 +45,9 @@ bool Node::reset_com(){
     boost::timed_mutex::scoped_lock lock(mutex); // TODO: timed lock?
     getStorage()->reset();
     interface_->send(NMTcommand::Frame(node_id_, NMTcommand::Reset_Com));
-    if(wait_for(BootUp, boost::chrono::seconds(10)) != 1){
-        return false;
+    if(wait_for(BootUp, boost::chrono::seconds(5)) != 1){
+		if(wait_for(PreOperational, boost::chrono::seconds(5)) != 1)
+			return false;
     }
     state_ = PreOperational;
     setHeartbeatInterval();
@@ -57,8 +58,9 @@ bool Node::reset(){
     getStorage()->reset();
 
     interface_->send(NMTcommand::Frame(node_id_, NMTcommand::Reset));
-    if(wait_for(BootUp, boost::chrono::seconds(10)) != 1){
-        return false;
+    if(wait_for(BootUp, boost::chrono::seconds(5)) != 1){
+		if(wait_for(PreOperational, boost::chrono::seconds(5)) != 1)
+			return false;
     }
     state_ = PreOperational;
     setHeartbeatInterval();
@@ -196,7 +198,7 @@ void Node::handleInit(LayerStatus &status){
         if(!start()) BOOST_THROW_EXCEPTION( TimeoutException("start timeout") );
     }
     catch(const TimeoutException&){
-        status.error(boost::str(boost::format("could not start node '%1%'") %  (int)node_id_));
+        status.error(boost::str(boost::format("could not start node number '%1%'") %  (int)node_id_));
     }
 }
 void Node::handleRecover(LayerStatus &status){

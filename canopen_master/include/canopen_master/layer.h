@@ -185,12 +185,12 @@ private:
       bool okay_on_start = status.template bounded<Bound>();
       for(Iterator it = begin; it != end; ++it){
           ((**it).*func)(status);
-          std::cout << "Layer Name: " << (**it).name << "\t";  //added for debugging 04/18
+          //std::cout << "Layer Name: " << (**it).name << "\t";  //added for debugging 04/18
           if(okay_on_start && !status.template bounded<Bound>()){
               return it;
           }
       }
-      std::cout << "NL" << std::endl;
+      //std::cout << "NL" << std::endl; //added for debugging 04/18
       return end;
   }
   template<typename Iterator, typename Data, typename FuncType> Iterator call(FuncType func, Data &status, const Iterator &begin, const Iterator &end){

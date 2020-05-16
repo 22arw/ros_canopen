@@ -418,6 +418,7 @@ void SDOClient::transmitAndWait(const canopen::ObjectDict::Entry &entry, const S
         {
             abort(0x05040000); // SDO protocol timed out.
             ROSCANOPEN_ERROR("canopen_master", "Did not receive a response message");
+            ROSCANOPEN_ERROR("canopen_master", entry.index);
             break;
         }
         if(!processFrame(msg)){

@@ -105,7 +105,7 @@ HandleLayer::HandleLayer(const std::string &name, const MotorBaseSharedPtr & mot
 }
 
 HandleLayer::CanSwitchResult HandleLayer::canSwitch(const MotorBase::OperationMode &m){
-    if(!motor_->isModeSupported(m) || commands_.find(m) == commands_.end()){
+    if(!motor_->isModeSupported(m) || commands_.find(m) == commands_.end()){    //commands_ does not find m, the is preventing using -4 as mode
         return NotSupported;
     }else if(motor_->getMode() == m){
         return NoNeedToSwitch;
@@ -195,25 +195,25 @@ void HandleLayer::handleWrite(LayerStatus &status, const LayerState &current_sta
     if(current_state == Ready){
         hardware_interface::JointHandle* jh = 0;
         if(forward_command_) jh = jh_;
-		std::cout << "HandleWrite under HandleLayer.cpp: Line 159" << "\tcmd_vel_: " << cmd_vel_ << "\tcmd_eff_: " << cmd_eff_ << "\tcmd_pos_: " << cmd_pos_ << std::endl;
-        std::cout << "HandleWrite under HandleLayer.cpp: Line 160" << "\tvel_: " << vel_ << "\teff_: " << eff_ << "\tpos_: " << pos_ << std::endl;
+		//std::cout << "HandleWrite under HandleLayer.cpp: Line 159" << "\tcmd_vel_: " << cmd_vel_ << "\tcmd_eff_: " << cmd_eff_ << "\tcmd_pos_: " << cmd_pos_ << std::endl;
+        //std::cout << "HandleWrite under HandleLayer.cpp: Line 160" << "\tvel_: " << vel_ << "\teff_: " << eff_ << "\tpos_: " << pos_ << std::endl;
         if(jh == &jph_){
-			std::cout << "Joint position Handle" << std::endl;
+			//std::cout << "Joint position Handle" << std::endl;
             motor_->setTarget(conv_target_pos_->evaluate());
             cmd_vel_ = vel_;
             cmd_eff_ = eff_;
         }else if(jh == &jvh_){
-			std::cout << "Joint velocity Handle" << std::endl;
+			//std::cout << "Joint velocity Handle" << std::endl;
             motor_->setTarget(conv_target_vel_->evaluate());
             cmd_pos_ = pos_;
             cmd_eff_ = eff_;
         }else if(jh == &jeh_){
-			std::cout << "Joint effort Handle" << std::endl;
+			//std::cout << "Joint effort Handle" << std::endl;
             motor_->setTarget(conv_target_eff_->evaluate());
             cmd_pos_ = pos_;
             cmd_vel_ = vel_;
         }else{
-			std::cout << "Joint Handle Pointer: " << jh << std::endl;
+			//std::cout << "Joint Handle Pointer: " << jh << std::endl;
             cmd_pos_ = pos_;
             cmd_vel_ = vel_;
             cmd_eff_ = eff_;

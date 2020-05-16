@@ -8,6 +8,7 @@
 
 #include <functional>
 #include "muParser.h"
+#include <iostream>
 
 namespace canopen {
 class UnitConverter{

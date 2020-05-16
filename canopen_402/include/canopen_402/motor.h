@@ -74,7 +74,8 @@ class Command402 {
     public:
         TransitionTable();
         const Op& get(const State402::InternalState &from, const State402::InternalState &to) const {
-            return transitions_.at(std::make_pair(from, to));
+            return transitions_.at(std::make_pair(from, to));   //returns the Op object in the map, this object contains a to_set_ & to_reset_
+            //Also, this returned value is then overloaded with (cw) to set cw = to the new cw
         }
     };
     static const TransitionTable transitions_;
@@ -340,6 +341,12 @@ public:
         registerMode<CyclicSynchronousPositionMode> (MotorBase::Cyclic_Synchronous_Position, storage);
         registerMode<CyclicSynchronousVelocityMode> (MotorBase::Cyclic_Synchronous_Velocity, storage);
         registerMode<CyclicSynchronousTorqueMode> (MotorBase::Cyclic_Synchronous_Torque, storage);
+
+        //RoboTeq Specific MOdes
+        registerMode<VelocityPositionMode> (MotorBase::Velocity_Position, storage);
+        //registerMode<ProfiledVelocityPositionMode> (MotorBase::Profiled_Velocity_Position, storage);
+        //registerMode<ProfiledPositionTrackingMode> (MotorBase::Profiled_Position_Tracking, storage);
+        //registerMode<ProfiledPositionRelativeMode> (MotorBase::Profiled_Position_Relative, storage);
     }
 
     class DefaultHomingMode: public HomingMode{
@@ -373,6 +380,7 @@ public:
     };
 
 private:
+    //These also need modified to add the new roboteq modes
     //These were moved into this class from line 203 on 03/24 to create a second class
     typedef ModeForwardHelper<MotorBase::Profiled_Velocity, int32_t, 0x60FF, 0, 0> ProfiledVelocityMode;
     typedef ModeForwardHelper<MotorBase::Profiled_Torque, int16_t, 0x6071, 0, 0> ProfiledTorqueMode;
@@ -381,6 +389,12 @@ private:
     typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Torque, int16_t, 0x6071, 0, 0> CyclicSynchronousTorqueMode;
     typedef ModeForwardHelper<MotorBase::Velocity, int16_t, 0x6042, 0, (1<<Command402::CW_Operation_mode_specific0)|(1<<Command402::CW_Operation_mode_specific1)|(1<<Command402::CW_Operation_mode_specific2)> VelocityMode;
     typedef ModeForwardHelper<MotorBase::Interpolated_Position, int32_t, 0x60C1, 0x01, (1<<Command402::CW_Operation_mode_specific0)> InterpolatedPositionMode;
+
+    //Roboteq Specifc Modes
+    typedef ModeForwardHelper<MotorBase::Velocity_Position, int16_t, 0x6042, 0, (1<<Command402::CW_Operation_mode_specific0)|(1<<Command402::CW_Operation_mode_specific1)|(1<<Command402::CW_Operation_mode_specific2)> VelocityPositionMode;
+    //typedef ModeForwardHelper<MotorBase::Profiled_Velocity_Position, int16_t, 0x60FF, 0, 0> ProfiledVelocityPositionMode;
+    //class ProfiledPositionTrackingMode : public ModeTargetHelper<int32_t>
+    //class ProfiledPositionRelativeMode : public ModeTargetHelper<int32_t>
 
     class ProfiledPositionMode : public ModeTargetHelper<int32_t> {
         canopen::ObjectStorage::Entry<int32_t> target_position_;
@@ -451,6 +465,12 @@ public:
         registerMode<CyclicSynchronousPositionMode> (MotorBase::Cyclic_Synchronous_Position, storage);
         registerMode<CyclicSynchronousVelocityMode> (MotorBase::Cyclic_Synchronous_Velocity, storage);
         registerMode<CyclicSynchronousTorqueMode> (MotorBase::Cyclic_Synchronous_Torque, storage);
+
+        //RoboTeq Specific MOdes
+        registerMode<VelocityPositionMode> (MotorBase::Velocity_Position, storage);
+        //registerMode<ProfiledVelocityPositionMode> (MotorBase::Profiled_Velocity_Position, storage);
+        //registerMode<ProfiledPositionTrackingMode> (MotorBase::Profiled_Position_Tracking, storage);
+        //registerMode<ProfiledPositionRelativeMode> (MotorBase::Profiled_Position_Relative, storage);
     }
 
     class DefaultHomingMode: public HomingMode{
@@ -492,6 +512,12 @@ private:
     typedef ModeForwardHelper<MotorBase::Cyclic_Synchronous_Torque, int16_t, 0x6871, 0, 0> CyclicSynchronousTorqueMode;
     typedef ModeForwardHelper<MotorBase::Velocity, int16_t, 0x6842, 0, (1<<Command402::CW_Operation_mode_specific0)|(1<<Command402::CW_Operation_mode_specific1)|(1<<Command402::CW_Operation_mode_specific2)> VelocityMode;
     typedef ModeForwardHelper<MotorBase::Interpolated_Position, int32_t, 0x68C1, 0x01, (1<<Command402::CW_Operation_mode_specific0)> InterpolatedPositionMode;
+
+    //Roboteq Specifc Modes
+    typedef ModeForwardHelper<MotorBase::Velocity_Position, int16_t, 0x6842, 0, (1<<Command402::CW_Operation_mode_specific0)|(1<<Command402::CW_Operation_mode_specific1)|(1<<Command402::CW_Operation_mode_specific2)> VelocityPositionMode;
+    //typedef ModeForwardHelper<MotorBase::Profiled_Velocity_Position, int16_t, 0x68FF, 0, 0> ProfiledVelocityPositionMode;
+    //class ProfiledPositionTrackingMode : public ModeTargetHelper<int32_t> //This will take some work
+    //class ProfiledPositionRelativeMode : public ModeTargetHelper<int32_t>
 
     class ProfiledPositionMode : public ModeTargetHelper<int32_t> {
         canopen::ObjectStorage::Entry<int32_t> target_position_;

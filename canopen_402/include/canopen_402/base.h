@@ -12,6 +12,11 @@ protected:
 public:
     enum OperationMode
     {
+        //Negative modes are munfacturar specific to RoboTeq
+        Velocity_Position = 253,   //Velocity controlled by position for excellent control at low speed correlates to -4
+        //Profiled_Velocity_Position = -3,
+        //Profiled_Position_Tracking = -2,
+        //Profiled_Position_Relative = -1,
         No_Mode = 0,
         Profiled_Position = 1,
         Velocity = 2,

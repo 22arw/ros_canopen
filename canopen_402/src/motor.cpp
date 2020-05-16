@@ -1,6 +1,8 @@
 #include <canopen_402/motor.h>
 #include <boost/thread/reverse_lock.hpp>
 #include <iostream>
+#include <cstdlib>  //added to incorporate negative drive modes for roboteq on 04/22
+#include <string>   //added for debugging 05/03
 
 namespace canopen
 {
@@ -117,7 +119,7 @@ Command402::TransitionTable::TransitionTable(){
     // fault reset
     /*15*/ add(s::Fault, s::Switch_On_Disabled, Op((1<<CW_Fault_Reset), 0));
 }
-State402::InternalState Command402::nextStateForEnabling(State402::InternalState state){
+State402::InternalState Command402::nextStateForEnabling(State402::InternalState state){    //goes through the states in an organized fashion
     switch(state){
     case State402::Start:
         return State402::Not_Ready_To_Switch_On;
@@ -150,7 +152,7 @@ bool Command402::setTransition(uint16_t &cw, const State402::InternalState &from
                 if(to == State402::Operation_Enable) hop = nextStateForEnabling(from);
                 *next = hop;
             }
-            transitions_.get(from, hop)(cw);
+            transitions_.get(from, hop)(cw);    //Sets the new control word for the transition
         }
         return true;
     }
@@ -360,7 +362,17 @@ bool Motor402::isModeSupportedByDevice(uint16_t mode){
     if(!supported_drive_modes_.valid()) {
         BOOST_THROW_EXCEPTION( std::runtime_error("Supported drive modes (object 6502) is not valid"));
     }
-    return mode > 0 && mode <= 32 && (supported_drive_modes_.get_cached() & (1<<(mode-1)));
+    
+    //added abs values to incorporate negative modes in RoboTeq
+    //if(mode <= 255 && mode > 251)
+    if(mode < 0 && mode >= -32)
+        return supported_drive_modes_.get_cached() & (1<<(32 - (255 - mode)));
+    else if(mode > 0 && mode <= 32)
+        return supported_drive_modes_.get_cached() & (1<<(mode-1));
+    else
+        return false;
+
+    //return mode > 0 && mode <= 32 && (supported_drive_modes_.get_cached() & (1<<(mode-1)));
 }
 void Motor402::registerMode(uint16_t id, const ModeSharedPtr &m){
     boost::mutex::scoped_lock map_lock(map_mutex_);
@@ -370,12 +382,15 @@ void Motor402::registerMode(uint16_t id, const ModeSharedPtr &m){
 ModeSharedPtr Motor402::allocMode(uint16_t mode){
     ModeSharedPtr res;
     if(isModeSupportedByDevice(mode)){
+        std::cout << "Mode supported by device: " << mode << std::endl;
         boost::mutex::scoped_lock map_lock(map_mutex_);
         std::unordered_map<uint16_t, ModeSharedPtr >::iterator it = modes_.find(mode);
         if(it != modes_.end()){
             res = it->second;
         }
     }
+    else
+        std::cout << "Mode NOT SUPPORTED" << std::endl;
     return res;
 }
 
@@ -449,16 +464,16 @@ bool Motor402::switchMode(LayerStatus &status, uint16_t mode) {
 
 bool Motor402::switchState(LayerStatus &status, const State402::InternalState &target){
     time_point abstime = get_abs_time(state_switch_timeout_);
-    State402::InternalState state = state_handler_.getState();
+    State402::InternalState state = state_handler_.getState();  //No CAN comms just pulls state_
     target_state_ = target;
     while(state != target_state_){
         boost::mutex::scoped_lock lock(cw_mutex_);
-        State402::InternalState next = State402::Unknown;
+        State402::InternalState next = State402::Unknown;   //State402::Unknown = 0, so an an if(&next) evaluates to false... Or maybe not
         if(!Command402::setTransition(control_word_ ,state, target_state_ , &next)){
             status.error("Could not set transition");
             return false;
         }
-        lock.unlock();
+        lock.unlock();  //unlocks cw
         if(state != next && !state_handler_.waitForNewState(abstime, state)){
             status.error("Transition timeout");
             return false;
@@ -467,7 +482,7 @@ bool Motor402::switchState(LayerStatus &status, const State402::InternalState &t
     return state == target;
 }
 
-bool Motor402::readState(LayerStatus &status, const LayerState &current_state){
+bool Motor402::readState(LayerStatus &status, const LayerState &current_state){ //This uses SDO to get status word and op mode from CANopen
     uint16_t old_sw, sw = status_word_entry_.get(); // TODO: added error handling
     old_sw = status_word_.exchange(sw);
 
@@ -512,11 +527,24 @@ void Motor402::handleWrite(LayerStatus &status, const LayerState &current_state)
             bool okay = false;
             if(selected_mode_ && selected_mode_->mode_id_ == mode_id_){
                 okay = selected_mode_->write(cwa);
+            //This next line was added for roboteq to run in mode -4 which is 65533 while acting like it is in mode 2
+            } else if(selected_mode_ && (selected_mode_->mode_id_ == 2) && (mode_id_ == 65533)) {
+                status.warn("attempting to write");
+                okay = selected_mode_->write(cwa);
             } else {
                 cwa = 0;
+                status.warn("okay not attempted");
+                if(selected_mode_){
+                    if(selected_mode_->mode_id_ == 2) {status.warn("Selected MODE = 2");}
+                    if(mode_id_ == 252) {status.warn("Actual MODE = 252");}
+                    status.warn(std::to_string(mode_id_));
+                }
             }
             if(okay) {
                 control_word_ &= ~(1<<Command402::CW_Halt);
+            }
+            else{
+                status.warn("okay was false");
             }
         }
         if(start_fault_reset_.exchange(false)){
@@ -565,7 +593,7 @@ void Motor402::handleInit(LayerStatus &status){
         (it->second)();
     }
 
-    if(!readState(status, Init)){
+    if(!readState(status, Init)){   //Calls SDO client via status_word_entry_.get() calls Entry::Get() calls Data::Get(false) calls read_delegate
         status.error("Could not read motor state");
         std::cout << "Motor.cpp line 479" << std::endl;	//added for debugging 03/16
         return;
@@ -576,7 +604,7 @@ void Motor402::handleInit(LayerStatus &status){
         control_word_ = 0;
         start_fault_reset_ = true;
     }
-    if(!switchState(status, State402::Operation_Enable)){
+    if(!switchState(status, State402::Operation_Enable)){   //It appears handleWrite actually posts the data this only changes control_word_
         status.error("Could not enable motor");
         std::cout << "Motor.cpp line 490! However, could not enable motor" << std::endl;	//added for debugging 03/16
         return;
@@ -605,7 +633,7 @@ void Motor402::handleInit(LayerStatus &status){
         return;
     }
 	std::cout << "Motor.cpp line 511" << std::endl;	//added for debugging 03/16
-    switchMode(status, No_Mode);
+    switchMode(status, No_Mode);    //If this is the case, how do we get it to the correct mode
 }
 void Motor402::handleShutdown(LayerStatus &status){
     switchMode(status, MotorBase::No_Mode);

@@ -610,28 +610,28 @@ void Motor402::handleInit(LayerStatus &status){
         return;
     }
 	std::cout << "Motor.cpp line 493" << std::endl;	//added for debugging 03/16
-    ModeSharedPtr m = allocMode(MotorBase::Homing);
-    if(!m){
-		std::cout << "Homing Not Supported" << std::endl;	//added for debugging 03/16
-        return; // homing not supported
-    }
+    // ModeSharedPtr m = allocMode(MotorBase::Homing); //Commented out 05/18
+    // if(!m){
+	// 	std::cout << "Homing Not Supported" << std::endl;	//added for debugging 03/16
+    //     return; // homing not supported
+    // }
 
-    HomingMode *homing = dynamic_cast<HomingMode*>(m.get());
+    // HomingMode *homing = dynamic_cast<HomingMode*>(m.get());
 
-    if(!homing){
-        status.error("Homing mode has incorrect handler");
-        return;
-    }
-	std::cout << "Motor.cpp line 502" << std::endl;	//added for debugging 03/16
-    if(!switchMode(status, MotorBase::Homing)){
-        status.error("Could not enter homing mode");
-        return;
-    }
+    // if(!homing){
+    //     status.error("Homing mode has incorrect handler");
+    //     return;
+    // }
+	// std::cout << "Motor.cpp line 502" << std::endl;	//added for debugging 03/16
+    // if(!switchMode(status, MotorBase::Homing)){
+    //     status.error("Could not enter homing mode");
+    //     return;
+    // }
 
-    if(!homing->executeHoming(status)){
-        status.error("Homing failed");
-        return;
-    }
+    // if(!homing->executeHoming(status)){
+    //     status.error("Homing failed");
+    //     return;
+    // }
 	std::cout << "Motor.cpp line 511" << std::endl;	//added for debugging 03/16
     switchMode(status, No_Mode);    //If this is the case, how do we get it to the correct mode
 }

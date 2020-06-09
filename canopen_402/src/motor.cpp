@@ -450,10 +450,18 @@ bool Motor402::switchMode(LayerStatus &status, uint16_t mode) {
         if(mode_id_ == mode){
             selected_mode_ = next_mode;
             okay = true;
-        }else{
+        } else if(mode_id_ == 65533 && mode == 2){
+            selected_mode_ = next_mode;
+            okay = true;
+        } else if(mode_id_ == 65535 && mode == 1){
+            selected_mode_ = next_mode;
+            okay = true;
+        } else{
             status.error("Mode switch timed out.");
             op_mode_.set(mode_id_);
         }
+        //std::cout << "Mode: " << mode << std::endl;
+        //std::cout << "ModeId: " << mode_id_ << std::endl;
     }
 
     if(!switchState(status, State402::Operation_Enable)) return false;
@@ -531,14 +539,22 @@ void Motor402::handleWrite(LayerStatus &status, const LayerState &current_state)
             } else if(selected_mode_ && (selected_mode_->mode_id_ == 2) && (mode_id_ == 65533)) {
                 status.warn("attempting to write");
                 okay = selected_mode_->write(cwa);
-            } else {
+            }
+            //This next line was added for roboteq to run in mode -1 which is 65536 while acting like it is in mode 1
+            // else if(selected_mode_ && (selected_mode_->mode_id_ == 1) && (mode_id_ == 65535)) {
+            //     status.warn("attempting to write");
+            //     okay = selected_mode_->write(cwa);
+            // }
+            else {
                 cwa = 0;
                 status.warn("okay not attempted");
-                if(selected_mode_){
-                    if(selected_mode_->mode_id_ == 2) {status.warn("Selected MODE = 2");}
-                    if(mode_id_ == 252) {status.warn("Actual MODE = 252");}
-                    status.warn(std::to_string(mode_id_));
-                }
+                // if(selected_mode_){
+                //     if(selected_mode_->mode_id_ == 2) {status.warn("Selected MODE = 2");}
+                //     if(mode_id_ == 252) {status.warn("Actual MODE = 252");}
+                //     if(selected_mode_->mode_id_ == 1) {status.warn("Selected MODE = 1");}
+                //     if(mode_id_ == 255) {status.warn("Actual MODE = 255");}
+                //     status.warn(std::to_string(mode_id_));
+                // }
             }
             if(okay) {
                 control_word_ &= ~(1<<Command402::CW_Halt);

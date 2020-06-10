@@ -1,8 +1,8 @@
 #include <canopen_402/motor.h>
 #include <boost/thread/reverse_lock.hpp>
-#include <iostream>
-#include <cstdlib>  //added to incorporate negative drive modes for roboteq on 04/22
-#include <string>   //added for debugging 05/03
+//#include <iostream>
+//#include <cstdlib>  //added to incorporate negative drive modes for roboteq on 04/22
+//#include <string>   //added for debugging 05/03
 
 namespace canopen
 {
@@ -382,7 +382,7 @@ void Motor402::registerMode(uint16_t id, const ModeSharedPtr &m){
 ModeSharedPtr Motor402::allocMode(uint16_t mode){
     ModeSharedPtr res;
     if(isModeSupportedByDevice(mode)){
-        std::cout << "Mode supported by device: " << mode << std::endl;
+        //std::cout << "Mode supported by device: " << mode << std::endl;
         boost::mutex::scoped_lock map_lock(map_mutex_);
         std::unordered_map<uint16_t, ModeSharedPtr >::iterator it = modes_.find(mode);
         if(it != modes_.end()){
@@ -390,7 +390,7 @@ ModeSharedPtr Motor402::allocMode(uint16_t mode){
         }
     }
     else
-        std::cout << "Mode NOT SUPPORTED" << std::endl;
+        //std::cout << "Mode NOT SUPPORTED" << std::endl;
     return res;
 }
 
@@ -604,31 +604,28 @@ void Motor402::handleDiag(LayerReport &report){
     }
 }
 void Motor402::handleInit(LayerStatus &status){
-	std::cout << "Motor.cpp line 472" << std::endl;	//added for debugging 03/16
     for(std::unordered_map<uint16_t, AllocFuncType>::iterator it = mode_allocators_.begin(); it != mode_allocators_.end(); ++it){
         (it->second)();
     }
 
     if(!readState(status, Init)){   //Calls SDO client via status_word_entry_.get() calls Entry::Get() calls Data::Get(false) calls read_delegate
         status.error("Could not read motor state");
-        std::cout << "Motor.cpp line 479" << std::endl;	//added for debugging 03/16
         return;
     }
     {
-		std::cout << "Motor.cpp line 483" << std::endl;	//added for debugging 03/16
         boost::mutex::scoped_lock lock(cw_mutex_);
         control_word_ = 0;
         start_fault_reset_ = true;
     }
     if(!switchState(status, State402::Operation_Enable)){   //It appears handleWrite actually posts the data this only changes control_word_
         status.error("Could not enable motor");
-        std::cout << "Motor.cpp line 490! However, could not enable motor" << std::endl;	//added for debugging 03/16
         return;
     }
-	std::cout << "Motor.cpp line 493" << std::endl;	//added for debugging 03/16
+    /* This section of code was commented out because it was causing faults on RoboTeq.
+    //There is not much use for this section currently
+
     // ModeSharedPtr m = allocMode(MotorBase::Homing); //Commented out 05/18
     // if(!m){
-	// 	std::cout << "Homing Not Supported" << std::endl;	//added for debugging 03/16
     //     return; // homing not supported
     // }
 
@@ -638,7 +635,6 @@ void Motor402::handleInit(LayerStatus &status){
     //     status.error("Homing mode has incorrect handler");
     //     return;
     // }
-	// std::cout << "Motor.cpp line 502" << std::endl;	//added for debugging 03/16
     // if(!switchMode(status, MotorBase::Homing)){
     //     status.error("Could not enter homing mode");
     //     return;
@@ -648,7 +644,8 @@ void Motor402::handleInit(LayerStatus &status){
     //     status.error("Homing failed");
     //     return;
     // }
-	std::cout << "Motor.cpp line 511" << std::endl;	//added for debugging 03/16
+    */
+
     switchMode(status, No_Mode);    //If this is the case, how do we get it to the correct mode
 }
 void Motor402::handleShutdown(LayerStatus &status){

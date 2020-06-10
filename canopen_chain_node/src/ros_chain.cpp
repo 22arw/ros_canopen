@@ -1,6 +1,6 @@
 #include <ros/package.h>
 #include <typeinfo>
-#include <iostream>	//Added 03/04 for debugging
+//#include <iostream>	//Added 03/04 for debugging
 
 #include <canopen_chain_node/ros_chain.h>
 
@@ -152,7 +152,6 @@ bool RosChain::handle_init(std_srvs::Trigger::Request  &req, std_srvs::Trigger::
             res.message = status.reason();
         }else{
             heartbeat_timer_.restart();
-            std::cout << "Ros_chain init was successful ros_chain.cpp: line 154" << std::endl;	//added for debugging 03/16
             return true;
         }
     }
@@ -331,7 +330,6 @@ bool RosChain::setup_bus(){
     }
 
     add(std::make_shared<CANLayer>(interface_, can_device, loopback));
-	std::cout << "\nThis was the interface ^";	//added 03/04 for debugging
     return true;
 }
 
@@ -379,7 +377,6 @@ bool RosChain::setup_sync(){
             return false;
         }
         add(sync_);
-        std::cout << "\nThis was the sync ^";	//added 03/04 for debugging	
     }
     return true;
 }
@@ -446,7 +443,6 @@ bool addLoggerEntries(XmlRpc::XmlRpcValue merged, const std::string param, uint8
 bool RosChain::setup_nodes(){
     nodes_.reset(new canopen::LayerGroupNoDiag<canopen::Node>("301 layer"));
     add(nodes_);
-    std::cout << "\nTHese are the nodes";	//added 03/04 for debugging
 
     emcy_handlers_.reset(new canopen::LayerGroupNoDiag<canopen::EMCYHandler>("EMCY layer"));
 
@@ -538,7 +534,6 @@ bool RosChain::setup_nodes(){
         LoggerSharedPtr logger = std::make_shared<Logger>(node);
 
         if(!nodeAdded(merged, node, logger)) return false;
-        std::cout << "Node added successfully" << std::endl;	//added for debugging 03/20
 
         if(!addLoggerEntries(merged, "log", diagnostic_updater::DiagnosticStatusWrapper::OK, *logger)) return false;
         if(!addLoggerEntries(merged, "log_warn", diagnostic_updater::DiagnosticStatusWrapper::WARN, *logger)) return false;
@@ -614,9 +609,7 @@ RosChain::RosChain(const ros::NodeHandle &nh, const ros::NodeHandle &nh_priv)
 bool RosChain::setup(){
     boost::mutex::scoped_lock lock(mutex_);
     bool okay = setup_chain();
-    std::cout << "\nChain Setup";	//added 03/04 for debugging
     if(okay) add(emcy_handlers_);
-    std::cout << "\nEMCY Setup ^";	//added 03/03 for debugging, i never make it to this line
     return okay;
 }
 

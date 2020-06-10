@@ -145,7 +145,6 @@ bool MotorChain::setup_chain() {
     robot_layer_.reset(new RobotLayer(nh_));
 
     ros::Duration dur(0.0) ;
-	std::cout << "Motor_Chain: line 87" << std::endl;
     if(RosChain::setup_chain()){
         add(motors_);
         add(robot_layer_);
@@ -158,7 +157,6 @@ bool MotorChain::setup_chain() {
         }
         cm_.reset(new ControllerManagerLayer(robot_layer_, nh_, dur));
         add(cm_);
-		std::cout << "Motor_Chain: line 100" << std::endl;
         return true;
     }
 

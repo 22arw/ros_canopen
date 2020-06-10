@@ -1,3 +1,5 @@
+//This was the old file used in ros_canopen. It was changed to include dual axes drives
+
 #ifndef CANOPEN_402_MOTOR_H
 #define CANOPEN_402_MOTOR_H
 
